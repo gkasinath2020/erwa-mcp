@@ -1,0 +1,27 @@
+[project]
+name = "asgard-mcp"
+version = "0.1.0"
+description = "Dney Guardrails MCP Server — check content for policy violations, PII, toxicity, and more."
+requires-python = ">=3.11"
+dependencies = [
+    # Upper bound is load-bearing, not hygiene. mcp 2.0.0 (2026-07-28) moved
+    # mcp.server.fastmcp, and because this image resolves dependencies at BUILD
+    # time from a floating spec, the v0.5.0 image built 2026-07-29 — one day
+    # after that release — shipped mcp 2.0 and crash-looped on import from the
+    # moment it was pushed. The ECR tag is immutable, so nothing about the
+    # deployed artifact drifted; the resolution did, silently, at build.
+    "mcp[cli]>=1.9.0,<2.0.0",
+    "httpx>=0.27.0",
+    "uvicorn>=0.30.0",
+    "pyjwt[crypto]>=2.8.0",
+]
+
+[project.optional-dependencies]
+dev = ["pytest", "pytest-asyncio", "respx"]
+
+[build-system]
+requires = ["setuptools>=68.0"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
