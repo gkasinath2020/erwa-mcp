@@ -415,3 +415,37 @@ def test_main_invokes_uvicorn(monkeypatch):
     server.main()
     assert calls["port"] == 3999
     assert calls["keep_alive"] > 300  # outlasts the ALB idle timeout
+
+
+# --- SCRUM-374 (Assay C4): a 429 names the limit ------------------------------------
+
+
+def _status_error(code, body, headers=None):
+    import httpx
+
+    req = httpx.Request("POST", "https://internal-alb.example/api/v1/guardrails/check")
+    resp = httpx.Response(code, json=body, headers=headers or {}, request=req)
+    return httpx.HTTPStatusError("x", request=req, response=resp)
+
+
+def test_a_429_from_dney_names_the_limit_and_when_it_resets():
+    import json
+
+    from asgard_mcp import server
+
+    msg = "This key has reached its daily guardrail spend limit. It resets at 00:00 UTC."
+    err = _status_error(429, {"detail": msg}, {"Retry-After": "3600"})
+    out = json.loads(server._tool_error(err))
+    assert out == {"error": msg, "limit": True, "retry_after_seconds": 3600}
+
+
+def test_other_status_errors_stay_generic_and_never_leak_the_url():
+    import json
+
+    from asgard_mcp import server
+
+    cases = [(500, {"detail": "boom"}), (429, {"detail": {"n": 1}}), (429, {"detail": "x" * 301})]
+    for code, body in cases:
+        out = server._tool_error(_status_error(code, body))
+        assert json.loads(out) == {"error": server._GENERIC_TOOL_ERROR}
+        assert "internal-alb" not in out

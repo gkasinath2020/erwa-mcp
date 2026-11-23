@@ -61,6 +61,31 @@ _GENERIC_TOOL_ERROR = (
 )
 
 
+#: The longest 429 detail passed through; ours are one sentence (daily caps,
+#: SCRUM-558; the per-key spend budget, SCRUM-374; the per-minute rate limit).
+_MAX_LIMIT_DETAIL = 300
+
+
+def _limit_detail(exc: Exception) -> dict | None:
+    """SCRUM-374 (Assay C4): a 429 from the Dney service is a LIMIT, not an outage.
+    Its ``detail`` is the service's own one-sentence message (no URL, no host), so
+    it reaches the agent as-is with ``retry_after_seconds`` instead of "temporarily
+    unavailable". Anything else, or a detail that is not a short string, is None."""
+    if not isinstance(exc, httpx.HTTPStatusError) or exc.response.status_code != 429:
+        return None
+    try:
+        detail = exc.response.json().get("detail")
+    except Exception:  # noqa: BLE001
+        return None
+    if not isinstance(detail, str) or not detail or len(detail) > _MAX_LIMIT_DETAIL:
+        return None
+    out: dict = {"error": detail, "limit": True}
+    retry = exc.response.headers.get("Retry-After")
+    if retry and retry.isdigit():
+        out["retry_after_seconds"] = int(retry)
+    return out
+
+
 def _tool_error(exc: Exception) -> str:
     """Serialize a tool error, surfacing only caller-safe messages.
 
@@ -72,6 +97,9 @@ def _tool_error(exc: Exception) -> str:
     """
     if isinstance(exc, ValueError):
         return json.dumps({"error": str(exc)})
+    limited = _limit_detail(exc)
+    if limited is not None:
+        return json.dumps(limited)
     logger.warning("Dney MCP tool error", exc_info=exc)
     return json.dumps({"error": _GENERIC_TOOL_ERROR})
 
