@@ -4,6 +4,8 @@ Dney Guardrails MCP server. Exposes Dney's guardrail engine as MCP tools for
 Claude Desktop, Claude.ai, and Claude Code — check content for policy
 violations, PII, toxicity, and more.
 
+Listed on [Glama](https://glama.ai/mcp/servers/gkasinath2020/erwa-mcp).
+
 ## Tools
 
 - `check_content(text, direction)` — check a message against active guardrails.
